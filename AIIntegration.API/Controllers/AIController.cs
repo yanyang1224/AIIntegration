@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using AIIntegration.Library.Interfaces;
 using AIIntegration.Library.Models;
-using AIIntegration.Library.Services.OpenAI;
-using AIIntegration.Library.Services.Claude;
-using AIIntegration.Library.Services.DeepSpeek;
-using AIIntegration.Library.Services.Qwen;
+using AIIntegration.Library.Factories;
+using AIIntegration.Library.Enums;
+using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace AIIntegration.API.Controllers;
 
@@ -12,47 +12,55 @@ namespace AIIntegration.API.Controllers;
 [Route("[controller]")]
 public class AIController : ControllerBase
 {
-    private readonly IEnumerable<IAIService> _aiServices;
+    private readonly AIServiceFactory _serviceFactory;
 
-    public AIController(IEnumerable<IAIService> aiServices)
+    public AIController(AIServiceFactory serviceFactory)
     {
-        _aiServices = aiServices;
+        _serviceFactory = serviceFactory;
     }
 
+    /// <summary>
+    /// 生成AI响应
+    /// </summary>
+    /// <param name="request">AI请求对象，包含提示和最大令牌数</param>
+    /// <param name="serviceType">AI服务类型，如OpenAI、Claude等</param>
+    /// <returns>包含生成文本和使用的令牌数的AI响应</returns>
     [HttpPost("generate")]
-    public async Task<ActionResult<AIResponse>> Generate([FromBody] AIRequest request, [FromQuery] string service)
+    public async Task<ActionResult<AIResponse>> Generate(
+        [FromBody] AIRequest request, 
+        [FromQuery, EnumDataType(typeof(AIServiceType))] AIServiceType serviceType)
     {
-        var selectedService = GetSelectedService(service);
-        if (selectedService == null)
+        try
         {
-            return NotFound($"Service '{service}' not found.");
+            var selectedService = _serviceFactory.CreateService(serviceType);
+            var response = await selectedService.GenerateResponseAsync(request);
+            return Ok(response);
         }
-
-        var response = await selectedService.GenerateResponseAsync(request);
-        return Ok(response);
+        catch (ArgumentException ex)
+        {
+            return NotFound(ex.Message);
+        }
     }
 
+    /// <summary>
+    /// 生成流式AI响应
+    /// </summary>
+    /// <param name="request">AI请求对象，包含提示和最大令牌数</param>
+    /// <param name="serviceType">AI服务类型，如OpenAI、Claude等</param>
+    /// <returns>包含生成文本片段的流式响应</returns>
     [HttpPost("generate-stream")]
-    public IActionResult GenerateStream([FromBody] AIRequest request, [FromQuery] string service)
+    public IActionResult GenerateStream(
+        [FromBody] AIRequest request, 
+        [FromQuery, EnumDataType(typeof(AIServiceType))] AIServiceType serviceType)
     {
-        var selectedService = GetSelectedService(service);
-        if (selectedService == null)
+        try
         {
-            return NotFound($"Service '{service}' not found.");
+            var selectedService = _serviceFactory.CreateService(serviceType);
+            return Ok(selectedService.GenerateStreamResponseAsync(request, HttpContext.RequestAborted));
         }
-
-        return Ok(selectedService.GenerateStreamResponseAsync(request, HttpContext.RequestAborted));
-    }
-
-    private IAIService? GetSelectedService(string service)
-    {
-        return service.ToLower() switch
+        catch (ArgumentException ex)
         {
-            "openai" => _aiServices.OfType<OpenAIService>().FirstOrDefault(),
-            "claude" => _aiServices.OfType<ClaudeService>().FirstOrDefault(),
-            "deepspeek" => _aiServices.OfType<DeepSpeekService>().FirstOrDefault(),
-            "qwen" => _aiServices.OfType<QwenService>().FirstOrDefault(),
-            _ => _aiServices.OfType<OpenAIService>().FirstOrDefault()
-        };
+            return NotFound(ex.Message);
+        }
     }
 }

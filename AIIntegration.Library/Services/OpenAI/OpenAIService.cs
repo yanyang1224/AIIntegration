@@ -9,9 +9,12 @@ using AIIntegration.Library.Models;
 using Newtonsoft.Json;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using AIIntegration.Library.Attributes;
+using AIIntegration.Library.Enums;
 
 namespace AIIntegration.Library.Services.OpenAI
 {
+    [AIService(AIServiceType.OpenAI)]
     public class OpenAIService : IAIService
     {
         private readonly HttpClient _httpClient;

@@ -9,9 +9,12 @@ using AIIntegration.Library.Models;
 using Newtonsoft.Json;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using AIIntegration.Library.Attributes;
+using AIIntegration.Library.Enums;
 
 namespace AIIntegration.Library.Services.DeepSpeek
 {
+    [AIService(AIServiceType.DeepSpeek)]
     public class DeepSpeekService : IAIService
     {
         private readonly HttpClient _httpClient;
