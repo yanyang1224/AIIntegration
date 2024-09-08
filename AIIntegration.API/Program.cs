@@ -21,16 +21,37 @@ builder.Services.AddSingleton<AIServiceConfig>(sp =>
     var configuration = sp.GetRequiredService<IConfiguration>();
     return new AIServiceConfig
     {
-        ApiUrl = configuration["OpenAI:ApiUrl"]!,
-        ApiKey = configuration["OpenAI:ApiKey"]!,
-        Model = configuration["OpenAI:Model"]!
+        OpenAI = new ServiceConfig
+        {
+            ApiUrl = configuration["OpenAI:ApiUrl"]!,
+            ApiKey = configuration["OpenAI:ApiKey"]!,
+            Model = configuration["OpenAI:Model"]!
+        },
+        Claude = new ServiceConfig
+        {
+            ApiUrl = configuration["Claude:ApiUrl"]!,
+            ApiKey = configuration["Claude:ApiKey"]!,
+            Model = configuration["Claude:Model"]!
+        },
+        DeepSpeek = new ServiceConfig
+        {
+            ApiUrl = configuration["DeepSpeek:ApiUrl"]!,
+            ApiKey = configuration["DeepSpeek:ApiKey"]!,
+            Model = configuration["DeepSpeek:Model"]!
+        },
+        Qwen = new ServiceConfig
+        {
+            ApiUrl = configuration["Qwen:ApiUrl"]!,
+            ApiKey = configuration["Qwen:ApiKey"]!,
+            Model = configuration["Qwen:Model"]!
+        }
     };
 });
 
-builder.Services.AddHttpClient<IAIService, OpenAIService>();
-builder.Services.AddHttpClient<IAIService, ClaudeService>();
-builder.Services.AddHttpClient<IAIService, DeepSpeekService>();
-builder.Services.AddHttpClient<IAIService, QwenService>();
+builder.Services.AddTransient<IAIService, OpenAIService>();
+builder.Services.AddTransient<IAIService, ClaudeService>();
+builder.Services.AddTransient<IAIService, DeepSpeekService>();
+builder.Services.AddTransient<IAIService, QwenService>();
 
 var app = builder.Build();
 

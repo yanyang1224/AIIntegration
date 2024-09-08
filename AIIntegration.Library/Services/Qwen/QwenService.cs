@@ -2,26 +2,33 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
-using System.IO;  // ��������
+using System.IO;  //
 using System.Threading.Tasks;
 using AIIntegration.Library.Interfaces;
 using AIIntegration.Library.Models;
 using Newtonsoft.Json;
+using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace AIIntegration.Library.Services.Qwen
 {
     public class QwenService : IAIService
     {
         private readonly HttpClient _httpClient;
-        private readonly AIServiceConfig _config;
+        private readonly ServiceConfig _config;
 
         public QwenService(AIServiceConfig config)
         {
-            _config = config;
+            _config = config.Qwen;
             _httpClient = new HttpClient();
             _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_config.ApiKey}");
         }
 
+        /// <summary>
+        /// 生成AI响应的异步方法
+        /// </summary>
+        /// <param name="request">AI请求对象</param>
+        /// <returns>包含AI响应的任务</returns>
         public async Task<AIResponse> GenerateResponseAsync(AIRequest request)
         {
             var qwenRequest = new
@@ -51,7 +58,13 @@ namespace AIIntegration.Library.Services.Qwen
             throw new Exception($"Qwen API request failed with status code: {response.StatusCode}");
         }
 
-        public async IAsyncEnumerable<string> GenerateStreamResponseAsync(AIRequest request)
+        /// <summary>
+        /// 生成流式AI响应的异步方法
+        /// </summary>
+        /// <param name="request">AI请求对象</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>包含响应字符串的异步枚举</returns>
+        public async IAsyncEnumerable<string> GenerateStreamResponseAsync(AIRequest request, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var qwenRequest = new
             {

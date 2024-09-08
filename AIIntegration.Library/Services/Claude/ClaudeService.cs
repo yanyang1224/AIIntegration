@@ -2,26 +2,33 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
-using System.IO;  // ��������
+using System.IO;  //
 using System.Threading.Tasks;
 using AIIntegration.Library.Interfaces;
 using AIIntegration.Library.Models;
 using Newtonsoft.Json;
+using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace AIIntegration.Library.Services.Claude
 {
     public class ClaudeService : IAIService
     {
         private readonly HttpClient _httpClient;
-        private readonly AIServiceConfig _config;
+        private readonly ServiceConfig _config;
 
         public ClaudeService(AIServiceConfig config)
         {
-            _config = config;
+            _config = config.Claude;
             _httpClient = new HttpClient();
             _httpClient.DefaultRequestHeaders.Add("x-api-key", _config.ApiKey);
         }
 
+        /// <summary>
+        /// 生成AI响应的异步方法
+        /// </summary>
+        /// <param name="request">AI请求对象</param>
+        /// <returns>包含AI响应的任务</returns>
         public async Task<AIResponse> GenerateResponseAsync(AIRequest request)
         {
             var claudeRequest = new
@@ -49,7 +56,13 @@ namespace AIIntegration.Library.Services.Claude
             throw new Exception($"Claude API request failed with status code: {response.StatusCode}");
         }
 
-        public async IAsyncEnumerable<string> GenerateStreamResponseAsync(AIRequest request)
+        /// <summary>
+        /// 生成流式AI响应的异步方法
+        /// </summary>
+        /// <param name="request">AI请求对象</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>包含响应字符串的异步枚举</returns>
+        public async IAsyncEnumerable<string> GenerateStreamResponseAsync(AIRequest request, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var claudeRequest = new
             {
