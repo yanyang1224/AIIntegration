@@ -23,7 +23,7 @@ public class AIController : ControllerBase
     /// 生成AI响应
     /// </summary>
     /// <param name="request">AI请求对象，包含提示和最大令牌数</param>
-    /// <param name="serviceType">AI服务类型，如OpenAI、Claude等</param>
+    /// <param name="serviceType">AI服务类型，如OpenAI、Claude、DeepSeek等</param>
     /// <returns>包含生成文本和使用的令牌数的AI响应</returns>
     [HttpPost("generate")]
     public async Task<ActionResult<AIResponse>> Generate(
@@ -46,7 +46,7 @@ public class AIController : ControllerBase
     /// 生成流式AI响应
     /// </summary>
     /// <param name="request">AI请求对象，包含提示和最大令牌数</param>
-    /// <param name="serviceType">AI服务类型，如OpenAI、Claude等</param>
+    /// <param name="serviceType">AI服务类型，如OpenAI、Claude、DeepSeek等</param>
     /// <returns>包含生成文本片段的流式响应</returns>
     [HttpPost("generate-stream")]
     public IActionResult GenerateStream(

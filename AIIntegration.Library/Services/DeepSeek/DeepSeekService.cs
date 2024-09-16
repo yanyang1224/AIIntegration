@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
-using System.IO;  //
+using System.IO;
 using System.Threading.Tasks;
 using AIIntegration.Library.Interfaces;
 using AIIntegration.Library.Models;
@@ -12,17 +12,17 @@ using System.Threading;
 using AIIntegration.Library.Attributes;
 using AIIntegration.Library.Enums;
 
-namespace AIIntegration.Library.Services.DeepSpeek
+namespace AIIntegration.Library.Services.DeepSeek
 {
-    [AIService(AIServiceType.DeepSpeek)]
-    public class DeepSpeekService : IAIService
+    [AIService(AIServiceType.DeepSeek)]
+    public class DeepSeekService : IAIService
     {
         private readonly HttpClient _httpClient;
         private readonly ServiceConfig _config;
 
-        public DeepSpeekService(AIServiceConfig config)
+        public DeepSeekService(AIServiceConfig config)
         {
-            _config = config.DeepSpeek;
+            _config = config.DeepSeek;
             _httpClient = new HttpClient();
             _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_config.ApiKey}");
         }
@@ -34,28 +34,29 @@ namespace AIIntegration.Library.Services.DeepSpeek
         /// <returns>包含AI响应的任务</returns>
         public async Task<AIResponse> GenerateResponseAsync(AIRequest request)
         {
-            var deepSpeekRequest = new
+            var deepSeekRequest = new
             {
-                text = request.Prompt,
-                max_length = request.MaxTokens
+                prompt = request.Prompt,
+                max_tokens = request.MaxTokens,
+                model = _config.Model
             };
 
-            var content = new StringContent(JsonConvert.SerializeObject(deepSpeekRequest), Encoding.UTF8, "application/json");
+            var content = new StringContent(JsonConvert.SerializeObject(deepSeekRequest), Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(_config.ApiUrl, content);
 
             if (response.IsSuccessStatusCode)
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
-                var deepSpeekResponse = JsonConvert.DeserializeObject<dynamic>(responseContent);
+                var deepSeekResponse = JsonConvert.DeserializeObject<dynamic>(responseContent);
 
                 return new AIResponse
                 {
-                    GeneratedText = deepSpeekResponse.generated_text,
-                    TokensUsed = deepSpeekResponse.tokens_used ?? 0
+                    GeneratedText = deepSeekResponse.choices[0].text,
+                    TokensUsed = deepSeekResponse.usage.total_tokens
                 };
             }
 
-            throw new Exception($"DeepSpeek API request failed with status code: {response.StatusCode}");
+            throw new Exception($"DeepSeek API request failed with status code: {response.StatusCode}");
         }
 
         /// <summary>
@@ -66,14 +67,15 @@ namespace AIIntegration.Library.Services.DeepSpeek
         /// <returns>包含响应字符串的异步枚举</returns>
         public async IAsyncEnumerable<string> GenerateStreamResponseAsync(AIRequest request, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            var deepSpeekRequest = new
+            var deepSeekRequest = new
             {
-                text = request.Prompt,
-                max_length = request.MaxTokens,
+                prompt = request.Prompt,
+                max_tokens = request.MaxTokens,
+                model = _config.Model,
                 stream = true
             };
 
-            var content = new StringContent(JsonConvert.SerializeObject(deepSpeekRequest), Encoding.UTF8, "application/json");
+            var content = new StringContent(JsonConvert.SerializeObject(deepSeekRequest), Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(_config.ApiUrl, content);
 
             if (response.IsSuccessStatusCode)
@@ -86,16 +88,16 @@ namespace AIIntegration.Library.Services.DeepSpeek
                     var line = await reader.ReadLineAsync();
                     if (string.IsNullOrEmpty(line)) continue;
 
-                    var deepSpeekResponse = JsonConvert.DeserializeObject<dynamic>(line);
-                    if (deepSpeekResponse.generated_text != null)
+                    var deepSeekResponse = JsonConvert.DeserializeObject<dynamic>(line);
+                    if (deepSeekResponse.choices != null && deepSeekResponse.choices[0].text != null)
                     {
-                        yield return deepSpeekResponse.generated_text.ToString();
+                        yield return deepSeekResponse.choices[0].text.ToString();
                     }
                 }
             }
             else
             {
-                throw new Exception($"DeepSpeek API request failed with status code: {response.StatusCode}");
+                throw new Exception($"DeepSeek API request failed with status code: {response.StatusCode}");
             }
         }
     }

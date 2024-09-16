@@ -3,7 +3,7 @@ using AIIntegration.Library.Models;
 using AIIntegration.Library.Factories;
 using AIIntegration.Library.Services.OpenAI;
 using AIIntegration.Library.Services.Claude;
-using AIIntegration.Library.Services.DeepSpeek;
+using AIIntegration.Library.Services.DeepSeek;
 using AIIntegration.Library.Services.Qwen;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
@@ -41,7 +41,7 @@ builder.Services.AddSingleton<AIServiceConfig>(sp =>
     {
         OpenAI = configuration.GetSection("OpenAI").Get<ServiceConfig>()!,
         Claude = configuration.GetSection("Claude").Get<ServiceConfig>()!,
-        DeepSpeek = configuration.GetSection("DeepSpeek").Get<ServiceConfig>()!,
+        DeepSeek = configuration.GetSection("DeepSeek").Get<ServiceConfig>()!,
         Qwen = configuration.GetSection("Qwen").Get<ServiceConfig>()!
     };
 });

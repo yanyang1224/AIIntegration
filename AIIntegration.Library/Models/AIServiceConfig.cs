@@ -4,7 +4,7 @@ namespace AIIntegration.Library.Models
     {
         public ServiceConfig OpenAI { get; set; }
         public ServiceConfig Claude { get; set; }
-        public ServiceConfig DeepSpeek { get; set; }
+        public ServiceConfig DeepSeek { get; set; }
         public ServiceConfig Qwen { get; set; }
     }
 

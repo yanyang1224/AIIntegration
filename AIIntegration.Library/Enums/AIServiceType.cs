@@ -10,8 +10,8 @@ namespace AIIntegration.Library.Enums
         [Description("Claude")]
         Claude,
 
-        [Description("DeepSpeek")]
-        DeepSpeek,
+        [Description("DeepSeek")]
+        DeepSeek,
 
         [Description("Qwen")]
         Qwen
