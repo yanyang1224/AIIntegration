@@ -11,6 +11,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using AIIntegration.Library.Attributes;
 using AIIntegration.Library.Enums;
+using System.Linq;
 
 namespace AIIntegration.Library.Services.Claude
 {
@@ -36,7 +37,7 @@ namespace AIIntegration.Library.Services.Claude
         {
             var claudeRequest = new
             {
-                prompt = request.Prompt,
+                prompt = string.Join("\n", request.Messages.Select(m => $"{m.Role}: {m.Content}")),
                 max_tokens_to_sample = request.MaxTokens,
                 model = _config.Model
             };
@@ -69,35 +70,32 @@ namespace AIIntegration.Library.Services.Claude
         {
             var claudeRequest = new
             {
-                prompt = request.Prompt,
+                prompt = string.Join("\n", request.Messages.Select(m => $"{m.Role}: {m.Content}")),
                 max_tokens_to_sample = request.MaxTokens,
                 model = _config.Model,
                 stream = true
             };
 
             var content = new StringContent(JsonConvert.SerializeObject(claudeRequest), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(_config.ApiUrl, content);
 
-            if (response.IsSuccessStatusCode)
+            using var response = await _httpClient.PostAsync(_config.ApiUrl, content, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            using var stream = await response.Content.ReadAsStreamAsync();
+            using var reader = new StreamReader(stream);
+
+            while (!reader.EndOfStream)
             {
-                using var stream = await response.Content.ReadAsStreamAsync();
-                using var reader = new StreamReader(stream);
+                cancellationToken.ThrowIfCancellationRequested();
 
-                while (!reader.EndOfStream)
+                var line = await reader.ReadLineAsync();
+                if (string.IsNullOrEmpty(line)) continue;
+
+                var claudeResponse = JsonConvert.DeserializeObject<dynamic>(line);
+                if (claudeResponse.completion != null)
                 {
-                    var line = await reader.ReadLineAsync();
-                    if (string.IsNullOrEmpty(line)) continue;
-
-                    var claudeResponse = JsonConvert.DeserializeObject<dynamic>(line);
-                    if (claudeResponse.completion != null)
-                    {
-                        yield return claudeResponse.completion.ToString();
-                    }
+                    yield return claudeResponse.completion.ToString();
                 }
-            }
-            else
-            {
-                throw new Exception($"Claude API request failed with status code: {response.StatusCode}");
             }
         }
     }

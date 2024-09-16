@@ -11,6 +11,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using AIIntegration.Library.Attributes;
 using AIIntegration.Library.Enums;
+using System.Linq;
 
 namespace AIIntegration.Library.Services.Qwen
 {
@@ -36,10 +37,7 @@ namespace AIIntegration.Library.Services.Qwen
         {
             var qwenRequest = new
             {
-                messages = new[]
-                {
-                    new { role = "user", content = request.Prompt }
-                },
+                messages = request.Messages.Select(m => new { role = m.Role, content = m.Content }).ToList(),
                 max_tokens = request.MaxTokens
             };
 
@@ -71,37 +69,34 @@ namespace AIIntegration.Library.Services.Qwen
         {
             var qwenRequest = new
             {
-                messages = new[]
-                {
-                    new { role = "user", content = request.Prompt }
-                },
+                messages = request.Messages.Select(m => new { role = m.Role, content = m.Content }).ToList(),
                 max_tokens = request.MaxTokens,
                 stream = true
             };
 
             var content = new StringContent(JsonConvert.SerializeObject(qwenRequest), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(_config.ApiUrl, content);
 
-            if (response.IsSuccessStatusCode)
+            using var response = await _httpClient.PostAsync(_config.ApiUrl, content, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            using var stream = await response.Content.ReadAsStreamAsync();
+            using var reader = new StreamReader(stream);
+
+            while (!reader.EndOfStream)
             {
-                using var stream = await response.Content.ReadAsStreamAsync();
-                using var reader = new StreamReader(stream);
+                cancellationToken.ThrowIfCancellationRequested();
 
-                while (!reader.EndOfStream)
+                var line = await reader.ReadLineAsync();
+                if (string.IsNullOrEmpty(line) || !line.StartsWith("data:")) continue;
+
+                var jsonData = line.Substring(5).Trim(); // Remove "data: " prefix
+                if (jsonData == "[DONE]") break;
+
+                var qwenResponse = JsonConvert.DeserializeObject<dynamic>(jsonData);
+                if (qwenResponse.choices != null && qwenResponse.choices[0].delta?.content != null)
                 {
-                    var line = await reader.ReadLineAsync();
-                    if (string.IsNullOrEmpty(line)) continue;
-
-                    var qwenResponse = JsonConvert.DeserializeObject<dynamic>(line);
-                    if (qwenResponse.choices != null && qwenResponse.choices[0].delta.content != null)
-                    {
-                        yield return qwenResponse.choices[0].delta.content.ToString();
-                    }
+                    yield return qwenResponse.choices[0].delta.content.ToString();
                 }
-            }
-            else
-            {
-                throw new Exception($"Qwen API request failed with status code: {response.StatusCode}");
             }
         }
     }

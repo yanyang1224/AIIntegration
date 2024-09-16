@@ -5,6 +5,8 @@ using AIIntegration.Library.Factories;
 using AIIntegration.Library.Enums;
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace AIIntegration.API.Controllers;
 
@@ -24,17 +26,36 @@ public class AIController : ControllerBase
     /// </summary>
     /// <param name="request">AI请求对象，包含提示和最大令牌数</param>
     /// <param name="serviceType">AI服务类型，如OpenAI、Claude、DeepSeek等</param>
-    /// <returns>包含生成文本和使用的令牌数的AI响应</returns>
+    /// <param name="streamResponse">是否使用流式响应</param>
+    /// <returns>AI响应或流式响应</returns>
     [HttpPost("generate")]
-    public async Task<ActionResult<AIResponse>> Generate(
-        [FromBody] AIRequest request, 
-        [FromQuery, EnumDataType(typeof(AIServiceType))] AIServiceType serviceType)
+    public async Task<IActionResult> Generate(
+        [FromBody] AIRequest request,
+        [FromQuery, EnumDataType(typeof(AIServiceType))] AIServiceType serviceType,
+        [FromQuery] bool streamResponse = false)
     {
         try
         {
             var selectedService = _serviceFactory.CreateService(serviceType);
-            var response = await selectedService.GenerateResponseAsync(request);
-            return Ok(response);
+
+            if (streamResponse)
+            {
+                var streamResult = selectedService.GenerateStreamResponseAsync(request, HttpContext.RequestAborted);
+                return new StreamingResult(async (stream, httpContext, cancellationToken) =>
+                {
+                    await foreach (var chunk in streamResult.WithCancellation(cancellationToken))
+                    {
+                        var bytes = Encoding.UTF8.GetBytes($"data: {chunk}\n\n");
+                        await stream.WriteAsync(bytes, cancellationToken);
+                        await stream.FlushAsync(cancellationToken);
+                    }
+                });
+            }
+            else
+            {
+                var response = await selectedService.GenerateResponseAsync(request);
+                return Ok(response);
+            }
         }
         catch (ArgumentException ex)
         {
@@ -42,25 +63,23 @@ public class AIController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// 生成流式AI响应
-    /// </summary>
-    /// <param name="request">AI请求对象，包含提示和最大令牌数</param>
-    /// <param name="serviceType">AI服务类型，如OpenAI、Claude、DeepSeek等</param>
-    /// <returns>包含生成文本片段的流式响应</returns>
-    [HttpPost("generate-stream")]
-    public IActionResult GenerateStream(
-        [FromBody] AIRequest request, 
-        [FromQuery, EnumDataType(typeof(AIServiceType))] AIServiceType serviceType)
+    // 添加这个自定义的 StreamingResult 类
+    public class StreamingResult : IActionResult
     {
-        try
+        private readonly Func<Stream, HttpContext, CancellationToken, Task> _callback;
+
+        public StreamingResult(Func<Stream, HttpContext, CancellationToken, Task> callback)
         {
-            var selectedService = _serviceFactory.CreateService(serviceType);
-            return Ok(selectedService.GenerateStreamResponseAsync(request, HttpContext.RequestAborted));
+            _callback = callback;
         }
-        catch (ArgumentException ex)
+
+        public async Task ExecuteResultAsync(ActionContext context)
         {
-            return NotFound(ex.Message);
+            context.HttpContext.Response.ContentType = "text/event-stream";
+            context.HttpContext.Response.Headers.Add("Cache-Control", "no-cache");
+            context.HttpContext.Response.Headers.Add("Connection", "keep-alive");
+
+            await _callback(context.HttpContext.Response.Body, context.HttpContext, context.HttpContext.RequestAborted);
         }
     }
 }

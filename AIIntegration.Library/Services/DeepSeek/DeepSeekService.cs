@@ -11,6 +11,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using AIIntegration.Library.Attributes;
 using AIIntegration.Library.Enums;
+using System.Linq;
 
 namespace AIIntegration.Library.Services.DeepSeek
 {
@@ -36,7 +37,7 @@ namespace AIIntegration.Library.Services.DeepSeek
         {
             var deepSeekRequest = new
             {
-                prompt = request.Prompt,
+                messages = request.Messages.Select(m => new { role = m.Role, content = m.Content }).ToList(),
                 max_tokens = request.MaxTokens,
                 model = _config.Model
             };
@@ -51,7 +52,7 @@ namespace AIIntegration.Library.Services.DeepSeek
 
                 return new AIResponse
                 {
-                    GeneratedText = deepSeekResponse.choices[0].text,
+                    GeneratedText = deepSeekResponse.choices[0].message.content,
                     TokensUsed = deepSeekResponse.usage.total_tokens
                 };
             }
@@ -69,35 +70,35 @@ namespace AIIntegration.Library.Services.DeepSeek
         {
             var deepSeekRequest = new
             {
-                prompt = request.Prompt,
+                messages = request.Messages.Select(m => new { role = m.Role, content = m.Content }).ToList(),
                 max_tokens = request.MaxTokens,
                 model = _config.Model,
                 stream = true
             };
 
             var content = new StringContent(JsonConvert.SerializeObject(deepSeekRequest), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(_config.ApiUrl, content);
+            
+            using var response = await _httpClient.PostAsync(_config.ApiUrl, content, cancellationToken);
+            response.EnsureSuccessStatusCode();
 
-            if (response.IsSuccessStatusCode)
+            using var stream = await response.Content.ReadAsStreamAsync();
+            using var reader = new StreamReader(stream);
+
+            while (!reader.EndOfStream)
             {
-                using var stream = await response.Content.ReadAsStreamAsync();
-                using var reader = new StreamReader(stream);
+                cancellationToken.ThrowIfCancellationRequested();
 
-                while (!reader.EndOfStream)
+                var line = await reader.ReadLineAsync();
+                if (string.IsNullOrEmpty(line) || !line.StartsWith("data:")) continue;
+
+                var jsonData = line.Substring(5).Trim(); // Remove "data:" prefix
+                if (jsonData == "[DONE]") break;
+
+                var deepSeekResponse = JsonConvert.DeserializeObject<dynamic>(jsonData);
+                if (deepSeekResponse.choices != null && deepSeekResponse.choices[0].delta?.content != null)
                 {
-                    var line = await reader.ReadLineAsync();
-                    if (string.IsNullOrEmpty(line)) continue;
-
-                    var deepSeekResponse = JsonConvert.DeserializeObject<dynamic>(line);
-                    if (deepSeekResponse.choices != null && deepSeekResponse.choices[0].text != null)
-                    {
-                        yield return deepSeekResponse.choices[0].text.ToString();
-                    }
+                    yield return deepSeekResponse.choices[0].delta.content.ToString();
                 }
-            }
-            else
-            {
-                throw new Exception($"DeepSeek API request failed with status code: {response.StatusCode}");
             }
         }
     }

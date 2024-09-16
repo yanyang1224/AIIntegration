@@ -11,6 +11,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using AIIntegration.Library.Attributes;
 using AIIntegration.Library.Enums;
+using System.Linq;
 
 namespace AIIntegration.Library.Services.OpenAI
 {
@@ -37,7 +38,7 @@ namespace AIIntegration.Library.Services.OpenAI
             var openAIRequest = new
             {
                 model = _config.Model,
-                prompt = request.Prompt,
+                messages = request.Messages.Select(m => new { role = m.Role, content = m.Content }).ToList(),
                 max_tokens = request.MaxTokens
             };
 
@@ -51,7 +52,7 @@ namespace AIIntegration.Library.Services.OpenAI
 
                 return new AIResponse
                 {
-                    GeneratedText = openAIResponse.choices[0].text,
+                    GeneratedText = openAIResponse.choices[0].message.content,
                     TokensUsed = openAIResponse.usage.total_tokens
                 };
             }
@@ -70,38 +71,34 @@ namespace AIIntegration.Library.Services.OpenAI
             var openAIRequest = new
             {
                 model = _config.Model,
-                prompt = request.Prompt,
+                messages = request.Messages.Select(m => new { role = m.Role, content = m.Content }).ToList(),
                 max_tokens = request.MaxTokens,
                 stream = true
             };
 
             var content = new StringContent(JsonConvert.SerializeObject(openAIRequest), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(_config.ApiUrl, content);
 
-            if (response.IsSuccessStatusCode)
+            using var response = await _httpClient.PostAsync(_config.ApiUrl, content, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            using var stream = await response.Content.ReadAsStreamAsync();
+            using var reader = new StreamReader(stream);
+
+            while (!reader.EndOfStream)
             {
-                using var stream = await response.Content.ReadAsStreamAsync();
-                using var reader = new StreamReader(stream);
+                cancellationToken.ThrowIfCancellationRequested();
 
-                while (!reader.EndOfStream)
+                var line = await reader.ReadLineAsync();
+                if (string.IsNullOrEmpty(line) || !line.StartsWith("data:")) continue;
+
+                var jsonData = line.Substring(5).Trim(); // Remove "data: " prefix
+                if (jsonData == "[DONE]") break;
+
+                var result = JsonConvert.DeserializeObject<dynamic>(jsonData);
+                if (result.choices != null && result.choices[0].delta?.content != null)
                 {
-                    var line = await reader.ReadLineAsync();
-                    if (line.StartsWith("data: "))
-                    {
-                        var data = line.Substring(6);
-                        if (data == "[DONE]") break;
-
-                        var result = JsonConvert.DeserializeObject<dynamic>(data);
-                        if (result.choices[0].text != null)
-                        {
-                            yield return result.choices[0].text.ToString();
-                        }
-                    }
+                    yield return result.choices[0].delta.content.ToString();
                 }
-            }
-            else
-            {
-                throw new Exception($"OpenAI API request failed with status code: {response.StatusCode}");
             }
         }
     }

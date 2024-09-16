@@ -10,8 +10,28 @@ using System.Reflection;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Text.Json.Serialization;
 using AIIntegration.API.Filters;
+using Microsoft.AspNetCore.ResponseCompression;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add CORS support
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("http://localhost:7001") // Replace with your frontend URL
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
+// Add response compression
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<GzipCompressionProvider>();
+});
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -57,6 +77,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Use CORS
+app.UseCors();
+
+// Use response compression
+app.UseResponseCompression();
+
 app.UseAuthorization();
 app.MapControllers();
 
