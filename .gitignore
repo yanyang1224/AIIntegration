@@ -9,3 +9,4 @@ bin/
 
 
 
+/AIIntegration.API/appsettings.Development.json
